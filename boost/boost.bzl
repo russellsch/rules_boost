@@ -156,6 +156,7 @@ def boost_so_library(
             "libs/%s/**" % boost_name,
         ]),
         deps = deps + select({
+            "@boost//:android": [":_imported_%s.so" % name],
             "@boost//:linux": [":_imported_%s.so" % name],
             "@boost//:osx": [":_imported_%s.dylib" % name],
             "@boost//:windows": [":_imported_%s.dll" % name],
@@ -225,11 +226,11 @@ def boost_deps():
             name = "boost",
             build_file = "@com_github_nelhage_rules_boost//:BUILD.boost",
             patch_cmds = ["rm -f doc/pdf/BUILD"],
-            sha256 = "afff36d392885120bcac079148c177d1f6f7730ec3d47233aa51b0afa4db94a5",
-            strip_prefix = "boost_1_74_0",
+            patch_cmds_win = ["Remove-Item -Force doc/pdf/BUILD"],
+            sha256 = "7bd7ddceec1a1dfdcbdb3e609b60d01739c38390a5f956385a12f3122049f0ca",
+            strip_prefix = "boost_1_76_0",
             urls = [
-                # "https://mirror.bazel.build/dl.bintray.com/boostorg/release/1.74.0/source/boost_1_74_0.tar.gz",
-                "https://dl.bintray.com/boostorg/release/1.74.0/source/boost_1_74_0.tar.gz",
+                "https://boostorg.jfrog.io/artifactory/main/release/1.76.0/source/boost_1_76_0.tar.gz",
             ],
         )
 

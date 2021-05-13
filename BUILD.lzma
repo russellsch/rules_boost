@@ -10,8 +10,19 @@ config_setting(
 )
 
 config_setting(
-    name = "osx",
-    constraint_values = ["@bazel_tools//platforms:osx"],
+    name = "osx_arm64",
+    constraint_values = [
+        "@bazel_tools//platforms:osx",
+        "@bazel_tools//platforms:aarch64",
+    ],
+)
+
+config_setting(
+    name = "osx_x86_64",
+    constraint_values = [
+        "@bazel_tools//platforms:osx",
+        "@bazel_tools//platforms:x86_64",
+    ],
 )
 
 config_setting(
@@ -19,11 +30,18 @@ config_setting(
     constraint_values = ["@bazel_tools//platforms:windows"],
 )
 
+config_setting(
+    name = "android",
+    constraint_values = ["@bazel_tools//platforms:android"],
+)
+
 copy_file(
     name = "copy_config",
     src = select({
+        ":android": "@com_github_nelhage_rules_boost//:config.lzma-linux.h",
         ":linux": "@com_github_nelhage_rules_boost//:config.lzma-linux.h",
-        ":osx": "@com_github_nelhage_rules_boost//:config.lzma-osx.h",
+        ":osx_arm64": "@com_github_nelhage_rules_boost//:config.lzma-osx-arm64.h",
+        ":osx_x86_64": "@com_github_nelhage_rules_boost//:config.lzma-osx-x86_64.h",
         ":windows": "@com_github_nelhage_rules_boost//:config.lzma-windows.h",
     }),
     out = "src/liblzma/api/config.h", # minimize the number of exported include paths
@@ -146,7 +164,10 @@ cc_library(
     includes = [
         "src/liblzma/api",
     ],
-    linkopts = ["-lpthread"],
+    linkopts = select({
+        ":android": [],
+        "//conditions:default": ["-lpthread"],
+    }),
     linkstatic = select({
         ":windows": True,
         "//conditions:default": False,

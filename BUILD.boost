@@ -18,6 +18,14 @@ config_setting(
 )
 
 config_setting(
+    name = "android",
+    constraint_values = [
+        "@bazel_tools//platforms:android",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
     name = "osx",
     constraint_values = [
         "@bazel_tools//platforms:osx",
@@ -70,6 +78,15 @@ config_setting(
 )
 
 config_setting(
+    name = "osx_arm64",
+    constraint_values = [
+        "@bazel_tools//platforms:osx",
+        "@bazel_tools//platforms:aarch64",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
     name = "osx_x86_64",
     constraint_values = [
         "@bazel_tools//platforms:osx",
@@ -95,6 +112,24 @@ config_setting(
     visibility = ["//visibility:public"],
 )
 
+config_setting(
+    name = "android_arm",
+    constraint_values = [
+        "@bazel_tools//platforms:android",
+        "@bazel_tools//platforms:arm",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+config_setting(
+    name = "android_aarch64",
+    constraint_values = [
+        "@bazel_tools//platforms:android",
+        "@bazel_tools//platforms:aarch64",
+    ],
+    visibility = ["//visibility:public"],
+)
+
 # Rename .asm to .S so that it will be handled with the C preprocessor.
 [copy_file(
     name = "rename_%s" % name,
@@ -106,13 +141,13 @@ config_setting(
     "ontop",
 ]]
 
-BOOST_CTX_ASM_SOURCES = select({
-    ":linux_aarch64": [
+BOOST_CTX_ASM_SOURCES = selects.with_or({
+    (":linux_aarch64", ":android_aarch64"): [
         "libs/context/src/asm/jump_arm64_aapcs_elf_gas.S",
         "libs/context/src/asm/make_arm64_aapcs_elf_gas.S",
         "libs/context/src/asm/ontop_arm64_aapcs_elf_gas.S",
     ],
-    ":linux_arm": [
+    (":linux_arm", ":android_arm"): [
         "libs/context/src/asm/jump_arm_aapcs_elf_gas.S",
         "libs/context/src/asm/make_arm_aapcs_elf_gas.S",
         "libs/context/src/asm/ontop_arm_aapcs_elf_gas.S",
@@ -126,6 +161,11 @@ BOOST_CTX_ASM_SOURCES = select({
         "libs/context/src/asm/jump_x86_64_sysv_elf_gas.S",
         "libs/context/src/asm/make_x86_64_sysv_elf_gas.S",
         "libs/context/src/asm/ontop_x86_64_sysv_elf_gas.S",
+    ],
+    ":osx_arm64": [
+        "libs/context/src/asm/jump_arm64_aapcs_macho_gas.S",
+        "libs/context/src/asm/make_arm64_aapcs_macho_gas.S",
+        "libs/context/src/asm/ontop_arm64_aapcs_macho_gas.S",
     ],
     ":osx_x86_64": [
         "libs/context/src/asm/jump_x86_64_sysv_macho_gas.S",
@@ -142,11 +182,11 @@ BOOST_CTX_ASM_SOURCES = select({
 
 boost_library(
     name = "context",
-    srcs = BOOST_CTX_ASM_SOURCES + select({
-        ":linux": [
+    srcs = BOOST_CTX_ASM_SOURCES + selects.with_or({
+        (":linux", ":android"): [
             "libs/context/src/posix/stack_traits.cpp",
         ],
-        ":osx_x86_64": [
+        ":osx": [
             "libs/context/src/posix/stack_traits.cpp",
         ],
         ":windows_x86_64": [
@@ -212,7 +252,7 @@ boost_library(
         ":linux": [
             "-lpthread",
         ],
-        ":osx_x86_64": [
+        ":osx": [
             "-lpthread",
         ],
         "//conditions:default": [],
@@ -295,6 +335,39 @@ boost_library(
     ],
 )
 
+BOOST_ATOMIC_SSE_SRCS = glob(
+    [
+        "libs/atomic/src/*sse2.cpp",
+        "libs/atomic/src/*sse41.cpp",
+    ],
+    allow_empty = True,
+)
+
+BOOST_ATOMIC_DEPS = [
+    ":align",
+    ":assert",
+    ":config",
+    ":cstdint",
+    ":predef",
+    ":type_traits",
+    ":winapi",
+]
+
+cc_library(
+    name = "atomic_sse",
+    srcs = BOOST_ATOMIC_SSE_SRCS + glob([
+        "libs/atomic/src/*.hpp",
+        "boost/atomic/detail/*.hpp",
+    ]),
+    copts = [
+        "-msse2",
+        "-msse4.1",
+        "-Iexternal/boost/libs/atomic/src",
+    ],
+    visibility = ["//visibility:private"],
+    deps = BOOST_ATOMIC_DEPS,
+)
+
 boost_library(
     name = "atomic",
     srcs = select({
@@ -305,15 +378,11 @@ boost_library(
         "boost/memory_order.hpp",
     ],
     copts = ["-Iexternal/boost/libs/atomic/src"],
-    exclude_src = ["libs/atomic/src/wait_ops_windows.cpp"],
-    deps = [
-        ":assert",
-        ":config",
-        ":cstdint",
-        ":predef",
-        ":type_traits",
-        ":winapi",
-    ],
+    exclude_src = ["libs/atomic/src/wait_ops_windows.cpp"] + BOOST_ATOMIC_SSE_SRCS,
+    deps = BOOST_ATOMIC_DEPS + select({
+        ":x86_64": [":atomic_sse"],
+        "//conditions:default": [],
+    }),
 )
 
 boost_library(
@@ -352,12 +421,15 @@ boost_library(
     defines = [
         "BOOST_ASIO_SEPARATE_COMPILATION",
     ] + select({
-        ":osx_x86_64": [
+        ":osx": [
             "BOOST_ASIO_DISABLE_STD_EXPERIMENTAL_STRING_VIEW",
         ],
         "//conditions:default": [],
     }),
-    linkopts = ["-lpthread"],
+    linkopts = select({
+        ":android": [],
+        "//conditions:default": ["-lpthread"],
+    }),
     deps = [
         ":bind",
         ":cerrno",
@@ -474,7 +546,7 @@ boost_library(
 boost_library(
     name = "compute",
     linkopts = select({
-        ":osx_x86_64": [
+        ":osx": [
             "-framework OpenCL",
         ],
         "//conditions:default": [
@@ -552,6 +624,7 @@ boost_library(
         "boost/cast.hpp",
         "boost/implicit_cast.hpp",
         "boost/lexical_cast.hpp",
+        "boost/lexical_cast/bad_lexical_cast.hpp",
         "boost/polymorphic_cast.hpp",
         "boost/polymorphic_pointer_cast.hpp",
     ],
@@ -574,10 +647,13 @@ boost_library(
 )
 
 BOOST_CORO_SRCS = select({
+    ":android": [
+        "libs/coroutine/src/posix/stack_traits.cpp",
+    ],
     ":linux": [
         "libs/coroutine/src/posix/stack_traits.cpp",
     ],
-    ":osx_x86_64": [
+    ":osx": [
         "libs/coroutine/src/posix/stack_traits.cpp",
     ],
     ":windows_x86_64": [
@@ -1033,6 +1109,10 @@ BOOST_LOCALE_COMMON_SOURCES = glob(
     ],
 )
 
+BOOST_LOCALE_STD_SOURCES = BOOST_LOCALE_COMMON_SOURCES + [
+    "libs/locale/src/util/iconv.hpp",
+]
+
 BOOST_LOCALE_POSIX_SOURCES = BOOST_LOCALE_COMMON_SOURCES + [
     "libs/locale/src/util/iconv.hpp",
 ] + glob([
@@ -1045,6 +1125,12 @@ BOOST_LOCALE_WIN32_SOURCES = BOOST_LOCALE_COMMON_SOURCES + glob([
     "libs/locale/src/win32/*.hpp",
 ])
 
+BOST_LOCALE_STD_COPTS = [
+    "-DBOOST_LOCALE_NO_POSIX_BACKEND=1",
+    "-DBOOST_LOCALE_NO_WINAPI_BACKEND",
+    "-DBOOST_LOCALE_WITH_ICONV",
+]
+
 BOOST_LOCALE_POSIX_COPTS = [
     "-DBOOST_LOCALE_WITH_ICONV",
     "-DBOOST_LOCALE_NO_WINAPI_BACKEND",
@@ -1055,17 +1141,19 @@ BOOST_LOCALE_WIN32_COPTS = []
 boost_library(
     name = "locale",
     srcs = select({
+        ":android": BOOST_LOCALE_STD_SOURCES,
         ":linux_arm": BOOST_LOCALE_POSIX_SOURCES,
         ":linux_ppc": BOOST_LOCALE_POSIX_SOURCES,
         ":linux_x86_64": BOOST_LOCALE_POSIX_SOURCES,
-        ":osx_x86_64": BOOST_LOCALE_POSIX_SOURCES,
+        ":osx": BOOST_LOCALE_POSIX_SOURCES,
         ":windows_x86_64": BOOST_LOCALE_WIN32_SOURCES,
     }),
     copts = select({
+        ":android": BOST_LOCALE_STD_COPTS,
         ":linux_arm": BOOST_LOCALE_POSIX_COPTS,
         ":linux_ppc": BOOST_LOCALE_POSIX_COPTS,
         ":linux_x86_64": BOOST_LOCALE_POSIX_COPTS,
-        ":osx_x86_64": BOOST_LOCALE_POSIX_COPTS,
+        ":osx": BOOST_LOCALE_POSIX_COPTS,
         ":windows_x86_64": BOOST_LOCALE_WIN32_COPTS,
     }) + _w_no_deprecated,
     deps = [
@@ -1291,6 +1379,10 @@ boost_library(
     ]) + [
         "boost/numeric/odeint.hpp",
     ],
+    linkopts = select({
+        "@boost//:android": ["-lm"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":fusion",
         ":lexical_cast",
@@ -1442,6 +1534,10 @@ boost_library(
 
 boost_library(
     name = "qvm",
+    linkopts = select({
+        "@boost//:android": ["-lm"],
+        "//conditions:default": [],
+    }),
     deps = [
         ":assert",
         ":core",
@@ -1653,6 +1749,7 @@ boost_library(
         "boost/enable_shared_from_this.hpp",
         "boost/make_shared.hpp",
         "boost/make_unique.hpp",
+        "boost/pointer_cast.hpp",
         "boost/pointer_to_other.hpp",
         "boost/weak_ptr.hpp",
     ],
@@ -1672,20 +1769,24 @@ boost_library(
 boost_library(
     name = "spirit",
     deps = [
-        ":variant",
+        ":foreach",
+        ":function",
+        ":iostreams",
         ":optional",
         ":phoenix",
-        ":function",
-        ":foreach",
-        ":iostreams",
         ":range",
         ":ref",
         ":tti",
         ":utility",
+        ":variant",
     ],
 )
 
 BOOST_STACKTRACE_SOURCES = select({
+    ":android": [
+        "libs/stacktrace/src/basic.cpp",
+        #"libs/stacktrace/src/noop.cpp",
+    ],
     ":linux_arm": [
         "libs/stacktrace/src/basic.cpp",
         "libs/stacktrace/src/noop.cpp",
@@ -1696,7 +1797,7 @@ BOOST_STACKTRACE_SOURCES = select({
     ":linux_x86_64": [
         "libs/stacktrace/src/backtrace.cpp",
     ],
-    ":osx_x86_64": [
+    ":osx": [
         "libs/stacktrace/src/addr2line.cpp",
     ],
     ":windows_x86_64": [
@@ -1709,7 +1810,7 @@ boost_library(
     name = "stacktrace",
     srcs = BOOST_STACKTRACE_SOURCES,
     defines = select({
-        ":osx_x86_64": [
+        ":osx": [
             "BOOST_STACKTRACE_GNU_SOURCE_NOT_REQUIRED",
         ],
         "//conditions:default": [],
@@ -1790,12 +1891,12 @@ boost_library(
 
 boost_library(
     name = "thread",
-    srcs = select({
-        ":linux": [
+    srcs = selects.with_or({
+        (":linux", ":android"): [
             "libs/thread/src/pthread/once.cpp",
             "libs/thread/src/pthread/thread.cpp",
         ],
-        ":osx_x86_64": [
+        ":osx": [
             "libs/thread/src/pthread/once.cpp",
             "libs/thread/src/pthread/thread.cpp",
         ],
@@ -1805,20 +1906,30 @@ boost_library(
             "libs/thread/src/win32/tss_pe.cpp",
         ],
     }),
-    hdrs = select({
-        ":linux": [
+    hdrs = selects.with_or({
+        (":linux", ":android"): [
             "libs/thread/src/pthread/once_atomic.cpp",
         ],
-        ":osx_x86_64": [
+        ":osx": [
             "libs/thread/src/pthread/once_atomic.cpp",
         ],
         ":windows_x86_64": [],
+    }),
+    linkopts = select({
+        ":linux": [
+            "-lpthread",
+        ],
+        ":osx": [
+            "-lpthread",
+        ],
+        ":windows_x86_64": [],
+        ":android": [],
     }),
     local_defines = select({
         ":linux_arm": [],
         ":linux_ppc": [],
         ":linux_x86_64": [],
-        ":osx_x86_64": [],
+        ":osx": [],
         ":windows_x86_64": [
             "BOOST_ALL_NO_LIB",
             "BOOST_THREAD_BUILD_LIB",
@@ -1826,15 +1937,6 @@ boost_library(
             "BOOST_WIN32_THREAD",
         ],
         "//conditions:default": [],
-    }),
-    linkopts = select({
-        ":linux": [
-            "-lpthread",
-        ],
-        ":osx_x86_64": [
-            "-lpthread",
-        ],
-        ":windows_x86_64": [],
     }),
     deps = [
         ":algorithm",
@@ -2141,18 +2243,16 @@ boost_library(
 boost_library(
     name = "phoenix",
     deps = [
-        ":proto",
         ":bind",
+        ":proto",
     ],
 )
 
 BOOST_LOG_CFLAGS = select({
-    ":linux_arm": [
-    ],
-    ":linux_ppc": [
-    ],
     ":x86_64": [
         "-msse4.2",
+    ],
+    "//conditions:default": [
     ],
 })
 
@@ -2180,12 +2280,10 @@ BOOST_LOG_DEPS = [
 ]
 
 BOOST_LOG_SSSE3_DEP = select({
-    ":linux_arm": [
-    ],
-    ":linux_ppc": [
-    ],
     ":x86_64": [
         ":log_dump_ssse3",
+    ],
+    "//conditions:default": [
     ],
 })
 
@@ -2194,10 +2292,10 @@ cc_library(
     srcs = ["libs/log/src/dump_ssse3.cpp"] + hdr_list("log"),
     hdrs = [],
     copts = ["-msse4.2"],
-    local_defines = BOOST_LOG_DEFINES,
     includes = [],
     licenses = ["notice"],
     linkopts = [],
+    local_defines = BOOST_LOG_DEFINES,
     visibility = ["//visibility:public"],
     deps = BOOST_LOG_DEPS,
 )
@@ -2211,11 +2309,11 @@ boost_library(
     copts = BOOST_LOG_CFLAGS + [
         "-Iexternal/boost/libs/log/src/",
     ],
-    local_defines = BOOST_LOG_DEFINES,
     exclude_src = [
         "libs/log/src/dump_avx2.cpp",
         "libs/log/src/dump_ssse3.cpp",
     ],
+    local_defines = BOOST_LOG_DEFINES,
     deps = BOOST_LOG_DEPS + BOOST_LOG_SSSE3_DEP,
 )
 
@@ -2310,4 +2408,25 @@ boost_library(
         ":typeof",
         ":utility",
     ],
+)
+
+boost_library(
+    name = "json",
+    deps = [
+        ":config",
+        ":container",
+        ":shared_ptr",
+        ":smart_ptr",
+        ":system",
+        ":throw_exception",
+        ":utility",
+    ],
+)
+
+boost_library(
+    name = "leaf",
+)
+
+boost_library(
+    name = "pfr",
 )
