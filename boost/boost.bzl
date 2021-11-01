@@ -1,4 +1,5 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
 hdrs_patterns = [
     "boost/%s.h",
@@ -114,36 +115,25 @@ def boost_so_library(
     if boost_name == None:
         boost_name = name
 
-    for suffix in ["so", "dll", "dylib"]:
-        native.cc_binary(
-            name = "lib_internal_%s.%s" % (name, suffix),
-            visibility = ["//visibility:private"],
-            srcs = hdr_list(boost_name, exclude_hdr) + srcs_list(boost_name, exclude_src) + srcs,
-            deps = deps,
-            copts = default_copts + copts,
-            defines = default_defines + defines,
-            linkshared = True,
-            licenses = ["notice"],
-        )
+    native.cc_binary(
+        name = "lib_internal_%s" % name,
+        visibility = ["//visibility:private"],
+        srcs = hdr_list(boost_name, exclude_hdr) + srcs_list(boost_name, exclude_src) + srcs,
+        deps = deps,
+        copts = default_copts + copts,
+        defines = default_defines + defines,
+        linkshared = True,
+        licenses = ["notice"],
+    )
     native.filegroup(
         name = "%s_dll_interface_file" % name,
-        srcs = [":lib_internal_%s.dll" % name],
+        srcs = [":lib_internal_%s" % name],
         output_group = "interface_library",
         visibility = ["//visibility:private"],
     )
     native.cc_import(
-        name = "_imported_%s.so" % name,
-        shared_library = ":lib_internal_%s.so" % name,
-        visibility = ["//visibility:private"],
-    )
-    native.cc_import(
-        name = "_imported_%s.dylib" % name,
-        shared_library = ":lib_internal_%s.dylib" % name,
-        visibility = ["//visibility:private"],
-    )
-    native.cc_import(
-        name = "_imported_%s.dll" % name,
-        shared_library = ":lib_internal_%s.dll" % name,
+        name = "_imported_%s" % name,
+        shared_library = ":lib_internal_%s" % name,
         interface_library = ":%s_dll_interface_file" % name,
         visibility = ["//visibility:private"],
     )
@@ -155,90 +145,84 @@ def boost_so_library(
         exclude_src = native.glob([
             "libs/%s/**" % boost_name,
         ]),
-        deps = deps + select({
-            "@boost//:android": [":_imported_%s.so" % name],
-            "@boost//:linux": [":_imported_%s.so" % name],
-            "@boost//:osx": [":_imported_%s.dylib" % name],
-            "@boost//:windows": [":_imported_%s.dll" % name],
-        }),
+        deps = deps + [":_imported_%s" % name],
     )
 
 def boost_deps():
-    if "bazel_skylib" not in native.existing_rules():
-        http_archive(
-            name = "bazel_skylib",
-            sha256 = "1dde365491125a3db70731e25658dfdd3bc5dbdfd11b840b3e987ecf043c7ca0",
-            urls = [
-                "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/0.9.0/bazel_skylib-0.9.0.tar.gz",
-                "https://github.com/bazelbuild/bazel-skylib/releases/download/0.9.0/bazel_skylib-0.9.0.tar.gz",
-            ],
-        )
+    maybe(
+        http_archive,
+        name = "bazel_skylib",
+        sha256 = "1dde365491125a3db70731e25658dfdd3bc5dbdfd11b840b3e987ecf043c7ca0",
+        urls = [
+            "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/0.9.0/bazel_skylib-0.9.0.tar.gz",
+            "https://github.com/bazelbuild/bazel-skylib/releases/download/0.9.0/bazel_skylib-0.9.0.tar.gz",
+        ],
+    )
 
-    if "net_zlib_zlib" not in native.existing_rules():
-        http_archive(
-            name = "net_zlib_zlib",
-            build_file = "@com_github_nelhage_rules_boost//:BUILD.zlib",
-            sha256 = "c3e5e9fdd5004dcb542feda5ee4f0ff0744628baf8ed2dd5d66f8ca1197cb1a1",
-            strip_prefix = "zlib-1.2.11",
-            urls = [
-                "https://mirror.bazel.build/zlib.net/zlib-1.2.11.tar.gz",
-                "https://zlib.net/zlib-1.2.11.tar.gz",
-            ],
-        )
+    maybe(
+        http_archive,
+        name = "net_zlib_zlib",
+        build_file = "@com_github_nelhage_rules_boost//:BUILD.zlib",
+        sha256 = "c3e5e9fdd5004dcb542feda5ee4f0ff0744628baf8ed2dd5d66f8ca1197cb1a1",
+        strip_prefix = "zlib-1.2.11",
+        urls = [
+            "https://mirror.bazel.build/zlib.net/zlib-1.2.11.tar.gz",
+            "https://zlib.net/zlib-1.2.11.tar.gz",
+        ],
+    )
 
     SOURCEFORGE_MIRRORS = ["phoenixnap", "newcontinuum", "cfhcable", "superb-sea2", "cytranet", "iweb", "gigenet", "ayera", "astuteinternet", "pilotfiber", "svwh"]
 
-    if "org_bzip_bzip2" not in native.existing_rules():
-        http_archive(
-            name = "org_bzip_bzip2",
-            build_file = "@com_github_nelhage_rules_boost//:BUILD.bzip2",
-            sha256 = "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269",
-            strip_prefix = "bzip2-1.0.8",
-            url = "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz",
-        )
+    maybe(
+        http_archive,
+        name = "org_bzip_bzip2",
+        build_file = "@com_github_nelhage_rules_boost//:BUILD.bzip2",
+        sha256 = "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269",
+        strip_prefix = "bzip2-1.0.8",
+        url = "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz",
+    )
 
-    if "org_lzma_lzma" not in native.existing_rules():
-        http_archive(
-            name = "org_lzma_lzma",
-            build_file = "@com_github_nelhage_rules_boost//:BUILD.lzma",
-            sha256 = "71928b357d0a09a12a4b4c5fafca8c31c19b0e7d3b8ebb19622e96f26dbf28cb",
-            strip_prefix = "xz-5.2.3",
-            urls = [
-                "https://%s.dl.sourceforge.net/project/lzmautils/xz-5.2.3.tar.gz" % m
-                for m in SOURCEFORGE_MIRRORS
-            ],
-        )
+    maybe(
+        http_archive,
+        name = "org_lzma_lzma",
+        build_file = "@com_github_nelhage_rules_boost//:BUILD.lzma",
+        sha256 = "71928b357d0a09a12a4b4c5fafca8c31c19b0e7d3b8ebb19622e96f26dbf28cb",
+        strip_prefix = "xz-5.2.3",
+        urls = [
+            "https://%s.dl.sourceforge.net/project/lzmautils/xz-5.2.3.tar.gz" % m
+            for m in SOURCEFORGE_MIRRORS
+        ],
+    )
 
-    if "com_github_facebook_zstd" not in native.existing_rules():
-        http_archive(
-            name = "com_github_facebook_zstd",
-            build_file = "@com_github_nelhage_rules_boost//:BUILD.zstd",
-            sha256 = "59ef70ebb757ffe74a7b3fe9c305e2ba3350021a918d168a046c6300aeea9315",
-            strip_prefix = "zstd-1.4.4",
-            urls = [
-                "https://mirror.bazel.build/github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz",
-                "https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz",
-            ],
-        )
+    maybe(
+        http_archive,
+        name = "com_github_facebook_zstd",
+        build_file = "@com_github_nelhage_rules_boost//:BUILD.zstd",
+        sha256 = "59ef70ebb757ffe74a7b3fe9c305e2ba3350021a918d168a046c6300aeea9315",
+        strip_prefix = "zstd-1.4.4",
+        urls = [
+            "https://mirror.bazel.build/github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz",
+            "https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz",
+        ],
+    )
 
-    if "boost" not in native.existing_rules():
-        http_archive(
-            name = "boost",
-            build_file = "@com_github_nelhage_rules_boost//:BUILD.boost",
-            patch_cmds = ["rm -f doc/pdf/BUILD"],
-            patch_cmds_win = ["Remove-Item -Force doc/pdf/BUILD"],
-            sha256 = "7bd7ddceec1a1dfdcbdb3e609b60d01739c38390a5f956385a12f3122049f0ca",
-            strip_prefix = "boost_1_76_0",
-            urls = [
-                "https://boostorg.jfrog.io/artifactory/main/release/1.76.0/source/boost_1_76_0.tar.gz",
-            ],
-        )
+    maybe(
+        http_archive,
+        name = "boost",
+        build_file = "@com_github_nelhage_rules_boost//:BUILD.boost",
+        patch_cmds = ["rm -f doc/pdf/BUILD"],
+        patch_cmds_win = ["Remove-Item -Force doc/pdf/BUILD"],
+        sha256 = "5347464af5b14ac54bb945dc68f1dd7c56f0dad7262816b956138fc53bcc0131",
+        strip_prefix = "boost_1_77_0",
+        urls = [
+            "https://boostorg.jfrog.io/artifactory/main/release/1.77.0/source/boost_1_77_0.tar.gz",
+        ],
+    )
 
-    if "openssl" not in native.existing_rules():
-        # https://github.com/google/boringssl/archive/57c37a99b6a9f523b10344b7b6b93ce9ad1da795.zip
-        http_archive(
-            name = "openssl",
-            sha256 = "84afcec7a9ce3a72fde95dc42d52bc6662df5976bdd3d440b3e7e7543b7031b9",
-            strip_prefix = "boringssl-57c37a99b6a9f523b10344b7b6b93ce9ad1da795",
-            url = "https://github.com/google/boringssl/archive/57c37a99b6a9f523b10344b7b6b93ce9ad1da795.tar.gz",
-        )
+    maybe(
+        http_archive,
+        name = "openssl",
+        sha256 = "6f640262999cd1fb33cf705922e453e835d2d20f3f06fe0d77f6426c19257308",
+        strip_prefix = "boringssl-fc44652a42b396e1645d5e72aba053349992136a",
+        url = "https://github.com/google/boringssl/archive/fc44652a42b396e1645d5e72aba053349992136a.tar.gz",
+    )

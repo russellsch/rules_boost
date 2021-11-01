@@ -210,6 +210,7 @@ boost_library(
         ":cstdint",
         ":detail",
         ":intrusive_ptr",
+        ":mp11",
         ":pool",
     ],
 )
@@ -456,6 +457,12 @@ boost_library(
 
 boost_library(
     name = "beast",
+    srcs = [
+        "@com_github_nelhage_rules_boost//src:build_beast.cpp",
+    ],
+    defines = [
+        "BOOST_BEAST_SEPARATE_COMPILATION",
+    ],
     deps = [
         ":asio",
         ":config",
@@ -738,6 +745,13 @@ boost_library(
 )
 
 boost_library(
+    name = "describe",
+    deps = [
+        ":mp11",
+    ],
+)
+
+boost_library(
     name = "dll",
     deps = [
         ":filesystem",
@@ -795,7 +809,11 @@ boost_library(
 boost_library(
     name = "filesystem",
     copts = _w_no_deprecated,
+    defines = [
+        "BOOST_FILESYSTEM_NO_CXX20_ATOMIC_REF",
+    ],
     deps = [
+        ":atomic",
         ":config",
         ":functional",
         ":io",
@@ -1136,13 +1154,16 @@ BOOST_LOCALE_POSIX_COPTS = [
     "-DBOOST_LOCALE_NO_WINAPI_BACKEND",
 ]
 
-BOOST_LOCALE_WIN32_COPTS = []
+BOOST_LOCALE_WIN32_COPTS = [
+    "-DBOOST_LOCALE_NO_POSIX_BACKEND",
+]
 
 boost_library(
     name = "locale",
     srcs = select({
         ":android": BOOST_LOCALE_STD_SOURCES,
         ":linux_arm": BOOST_LOCALE_POSIX_SOURCES,
+        ":linux_aarch64": BOOST_LOCALE_POSIX_SOURCES,
         ":linux_ppc": BOOST_LOCALE_POSIX_SOURCES,
         ":linux_x86_64": BOOST_LOCALE_POSIX_SOURCES,
         ":osx": BOOST_LOCALE_POSIX_SOURCES,
@@ -1151,6 +1172,7 @@ boost_library(
     copts = select({
         ":android": BOST_LOCALE_STD_COPTS,
         ":linux_arm": BOOST_LOCALE_POSIX_COPTS,
+        ":linux_aarch64": BOOST_LOCALE_POSIX_COPTS,
         ":linux_ppc": BOOST_LOCALE_POSIX_COPTS,
         ":linux_x86_64": BOOST_LOCALE_POSIX_COPTS,
         ":osx": BOOST_LOCALE_POSIX_COPTS,
@@ -1791,6 +1813,10 @@ BOOST_STACKTRACE_SOURCES = select({
         "libs/stacktrace/src/basic.cpp",
         "libs/stacktrace/src/noop.cpp",
     ],
+    ":linux_aarch64": [
+        "libs/stacktrace/src/basic.cpp",
+        # "libs/stacktrace/src/noop.cpp",
+    ],
     ":linux_ppc": [
         "libs/stacktrace/src/backtrace.cpp",
     ],
@@ -1804,6 +1830,7 @@ BOOST_STACKTRACE_SOURCES = select({
         "libs/stacktrace/src/windbg.cpp",
         "libs/stacktrace/src/windbg_cached.cpp",
     ],
+    "//conditions:default": [],
 })
 
 boost_library(
@@ -1821,6 +1848,9 @@ boost_library(
             "-lbacktrace -ldl",
         ],
         ":linux_x86_64": [
+            "-lbacktrace -ldl",
+        ],
+        ":linux_aarch64": [
             "-lbacktrace -ldl",
         ],
         "//conditions:default": [],
@@ -2141,6 +2171,13 @@ boost_library(
 )
 
 boost_library(
+    name = "vmd",
+    deps = [
+        ":preprocessor",
+    ],
+)
+
+boost_library(
     name = "timer",
     deps = [
         ":cerrno",
@@ -2380,6 +2417,10 @@ boost_library(
 )
 
 boost_library(
+    name = "lambda2",
+)
+
+boost_library(
     name = "sort",
 )
 
@@ -2415,6 +2456,7 @@ boost_library(
     deps = [
         ":config",
         ":container",
+        ":mp11",
         ":shared_ptr",
         ":smart_ptr",
         ":system",
