@@ -20,7 +20,7 @@ srcs_patterns = [
 # Building boost results in many warnings for unused values. Downstream users
 # won't be interested, so just disable the warning.
 default_copts = select({
-    "@boost//:windows": [],
+    "@platforms//os:windows": [],
     "//conditions:default": ["-Wno-unused"],
 })
 
@@ -198,11 +198,10 @@ def boost_deps():
         http_archive,
         name = "com_github_facebook_zstd",
         build_file = "@com_github_nelhage_rules_boost//:BUILD.zstd",
-        sha256 = "59ef70ebb757ffe74a7b3fe9c305e2ba3350021a918d168a046c6300aeea9315",
-        strip_prefix = "zstd-1.4.4",
+        sha256 = "e28b2f2ed5710ea0d3a1ecac3f6a947a016b972b9dd30242369010e5f53d7002",
+        strip_prefix = "zstd-1.5.1",
         urls = [
-            "https://mirror.bazel.build/github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz",
-            "https://github.com/facebook/zstd/releases/download/v1.4.4/zstd-1.4.4.tar.gz",
+            "https://github.com/facebook/zstd/releases/download/v1.5.1/zstd-1.5.1.tar.gz",
         ],
     )
 
@@ -212,10 +211,10 @@ def boost_deps():
         build_file = "@com_github_nelhage_rules_boost//:BUILD.boost",
         patch_cmds = ["rm -f doc/pdf/BUILD"],
         patch_cmds_win = ["Remove-Item -Force doc/pdf/BUILD"],
-        sha256 = "5347464af5b14ac54bb945dc68f1dd7c56f0dad7262816b956138fc53bcc0131",
-        strip_prefix = "boost_1_77_0",
+        sha256 = "94ced8b72956591c4775ae2207a9763d3600b30d9d7446562c552f0a14a63be7",
+        strip_prefix = "boost_1_78_0",
         urls = [
-            "https://boostorg.jfrog.io/artifactory/main/release/1.77.0/source/boost_1_77_0.tar.gz",
+            "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.tar.gz",
         ],
     )
 

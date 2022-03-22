@@ -1,9 +1,52 @@
-package(default_visibility = ["//visibility:public"])
+load("@bazel_skylib//lib:selects.bzl", "selects")
 
 licenses(["notice"])  # BSD/MIT-like license (for zlib)
 
-cc_library(
+alias(
     name = "zlib",
+    visibility = ["//visibility:public"],
+    actual = selects.with_or({
+        (":android", ":ios", ":watchos", ":tvos"): ":zlib_system",
+        "//conditions:default": ":zlib_source",
+    })
+)
+
+# Longer term TODO: Blocked until at least after Bazel 5.1 has been released.
+# config_setting()s wrappers for constraint_values are necessary for alias rules in Bazel because of a bug in 5.0
+# Needs release of fix to https://github.com/bazelbuild/bazel/issues/13047, which will likely happen in 5.1
+# At that time, remove these config settings below and update their use in the alias above to the raw @platforms//os constraint_value()s
+# Note: There are other instances of this message to update or resolve in sync.
+
+config_setting(
+    name = "android",
+    constraint_values = [
+        "@platforms//os:android",
+    ],
+)
+
+config_setting(
+    name = "ios",
+    constraint_values = [
+        "@platforms//os:ios",
+    ],
+)
+
+config_setting(
+    name = "watchos",
+    constraint_values = [
+        "@platforms//os:watchos",
+    ],
+)
+
+config_setting(
+    name = "tvos",
+    constraint_values = [
+        "@platforms//os:tvos",
+    ],
+)
+
+cc_library(
+    name = "zlib_source",
     srcs = [
         "adler32.c",
         "compress.c",
@@ -33,11 +76,18 @@ cc_library(
     ],
     hdrs = ["zlib.h"],
     copts = select({
-        "@boost//:windows": [],
-        "//conditions:default": [
-            "-Wno-shift-negative-value",
-            "-DZ_HAVE_UNISTD_H",
-        ],
+        "@platforms//os:windows": [],
+        "//conditions:default": ["-Wno-shift-negative-value"],
     }),
     includes = ["."],
+    local_defines = select({
+        "@platforms//os:windows": [],
+        "//conditions:default": ["Z_HAVE_UNISTD_H"],
+    }),
+)
+
+# For OSs that bundle libz
+cc_library( 
+    name = "zlib_system",
+    linkopts = ["-lz"],
 )

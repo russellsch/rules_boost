@@ -134,6 +134,15 @@ cc_test(
 )
 
 cc_test(
+    name = "crc_test",
+    size = "small",
+    srcs = ["crc_test.cc"],
+    deps = [
+        "@boost//:crc",
+    ],
+)
+
+cc_test(
     name = "dynamic_bitset_test",
     size = "small",
     srcs = ["dynamic_bitset_test.cc"],
@@ -217,11 +226,31 @@ cc_test(
 )
 
 cc_test(
+    name = "histogram_test",
+    size = "small",
+    srcs = ["histogram_test.cc"],
+    deps = [
+        "@boost//:histogram",
+        "@boost//:format",
+    ],
+    copts = ["-std=c++14"],
+)
+
+cc_test(
     name = "icl_test",
     size = "small",
     srcs = ["icl_test.cc"],
     deps = [
         "@boost//:icl",
+    ],
+)
+
+cc_test(
+    name = "integer_test",
+    size = "small",
+    srcs = ["integer_test.cc"],
+    deps = [
+        "@boost//:integer"
     ],
 )
 
@@ -563,20 +592,12 @@ cc_test(
     ],
 )
 
-config_setting(
-    name = "windows",
-    constraint_values = [
-        "@bazel_tools//platforms:windows",
-    ],
-    visibility = ["//visibility:public"],
-)
-
 cc_test(
     name = "pfr_test",
     srcs = ["pfr_test.cc"],
     copts = select({
-        ":windows": ["/std:c++17"],
-        "//conditions:default": ["-std=c++1z"],
+        "@platforms//os:windows": ["/std:c++17"],
+        "//conditions:default": ["-std=c++17"],
     }),
     deps = [
         "@boost//:pfr",
@@ -588,5 +609,53 @@ platform(
     constraint_values = [
         "@platforms//os:android",
         "@platforms//cpu:aarch64",
+    ],
+)
+
+cc_test(
+    name = "graph_test",
+    srcs = ["graph_test.cc"],
+    deps = [
+        "@boost//:graph",
+    ],
+)
+
+cc_test(
+    name = "smart_ptr_test",
+    srcs = ["smart_ptr_test.cc"],
+    deps = [
+        "@boost//:smart_ptr",
+    ],
+)
+
+cc_test(
+    name = "throw_exception_test",
+    srcs = ["throw_exception_test.cc"],
+    deps = [
+        "@boost//:throw_exception",
+    ],
+)
+
+cc_test(
+    name = "exception_test",
+    srcs = ["exception_test.cc"],
+    deps = [
+        "@boost//:exception",
+    ],
+)
+
+cc_test(
+    name = "interprocess_test",
+    srcs = ["interprocess_test.cc"],
+    deps = [
+        "@boost//:interprocess",
+    ],
+)
+
+cc_test(
+    name = "container_test",
+    srcs = ["container_test.cc"],
+    deps = [
+        "@boost//:container",
     ],
 )
