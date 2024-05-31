@@ -1,27 +1,10 @@
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load("@bazel_tools//tools/build_defs/repo:utils.bzl", "maybe")
 
-hdrs_patterns = [
-    "boost/%s.h",
-    "boost/%s_fwd.h",
-    "boost/%s.hpp",
-    "boost/%s_fwd.hpp",
-    "boost/%s/**/*.hpp",
-    "boost/%s/**/*.ipp",
-    "boost/%s/**/*.h",
-    "libs/%s/src/*.ipp",
-]
-
-srcs_patterns = [
-    "libs/%s/src/*.cpp",
-    "libs/%s/src/*.hpp",
-]
-
-# Building boost results in many warnings for unused values. Downstream users
-# won't be interested, so just disable the warning.
+# Building boost results in many warnings. Downstream users won't be interested, so just disable them.
 default_copts = select({
-    "@platforms//os:windows": [],
-    "//conditions:default": ["-Wno-unused"],
+    "@platforms//os:windows": ["/W0"],
+    "//conditions:default": ["-w"],
 })
 
 default_defines = select({
@@ -31,69 +14,39 @@ default_defines = select({
 
 def srcs_list(library_name, exclude):
     return native.glob(
-        [p % (library_name,) for p in srcs_patterns],
-        exclude = exclude,
+        ["libs/%s/src/*" % library_name],
+        exclude = ["**/*.asm", "**/*.S", "**/*.doc"] + exclude,
         allow_empty = True,
     )
 
 def hdr_list(library_name, exclude = []):
-    return native.glob([p % (library_name,) for p in hdrs_patterns], exclude = exclude, allow_empty = True)
+    return native.glob(["libs/%s/include/boost/**" % library_name], exclude = exclude, allow_empty = True)
 
 def boost_library(
         name,
         boost_name = None,
-        defines = None,
-        local_defines = None,
-        includes = None,
-        hdrs = None,
-        srcs = None,
-        deps = None,
-        copts = None,
-        exclude_src = [],
+        defines = [],
+        includes = [],
+        hdrs = [],
+        srcs = [],
+        copts = [],
         exclude_hdr = [],
-        linkopts = None,
-        linkstatic = None,
-        visibility = ["//visibility:public"]):
+        exclude_src = [],
+        visibility = ["//visibility:public"],
+        **kwargs):
     if boost_name == None:
         boost_name = name
-
-    if defines == None:
-        defines = []
-
-    if local_defines == None:
-        local_defines = []
-
-    if includes == None:
-        includes = []
-
-    if hdrs == None:
-        hdrs = []
-
-    if srcs == None:
-        srcs = []
-
-    if deps == None:
-        deps = []
-
-    if copts == None:
-        copts = []
-
-    if linkopts == None:
-        linkopts = []
 
     return native.cc_library(
         name = name,
         visibility = visibility,
         defines = default_defines + defines,
-        includes = ["."] + includes,
-        local_defines = local_defines,
+        includes = ["libs/%s/include" % boost_name] + includes,
         hdrs = hdr_list(boost_name, exclude_hdr) + hdrs,
         srcs = srcs_list(boost_name, exclude_src) + srcs,
-        deps = deps,
         copts = default_copts + copts,
-        linkopts = linkopts,
-        linkstatic = linkstatic,
         licenses = ["notice"],
+        **kwargs
     )
 
 # Some boost libraries are not safe to use as dynamic libraries unless a
@@ -107,23 +60,27 @@ def boost_so_library(
         name,
         boost_name = None,
         defines = [],
+        includes = [],
+        hdrs = [],
         srcs = [],
         deps = [],
         copts = [],
+        exclude_hdr = [],
         exclude_src = [],
-        exclude_hdr = []):
+        **kwargs):
     if boost_name == None:
         boost_name = name
 
     native.cc_binary(
         name = "lib_internal_%s" % name,
-        visibility = ["//visibility:private"],
-        srcs = hdr_list(boost_name, exclude_hdr) + srcs_list(boost_name, exclude_src) + srcs,
+        defines = default_defines + defines,
+        includes = ["libs/%s/include" % boost_name] + includes,
+        srcs = hdr_list(boost_name, exclude_hdr) + hdrs + srcs_list(boost_name, exclude_src) + srcs,
         deps = deps,
         copts = default_copts + copts,
-        defines = default_defines + defines,
         linkshared = True,
-        licenses = ["notice"],
+        visibility = ["//visibility:private"],
+        **kwargs
     )
     native.filegroup(
         name = "%s_dll_interface_file" % name,
@@ -141,87 +98,30 @@ def boost_so_library(
         name = name,
         boost_name = boost_name,
         defines = defines,
+        includes = includes,
+        hdrs = hdrs,
         exclude_hdr = exclude_hdr,
-        exclude_src = native.glob([
-            "libs/%s/**" % boost_name,
-        ]),
+        exclude_src = native.glob(["**"]),
         deps = deps + [":_imported_%s" % name],
+        **kwargs
     )
 
 def boost_deps():
     maybe(
         http_archive,
-        name = "bazel_skylib",
-        sha256 = "1dde365491125a3db70731e25658dfdd3bc5dbdfd11b840b3e987ecf043c7ca0",
-        urls = [
-            "https://mirror.bazel.build/github.com/bazelbuild/bazel-skylib/releases/download/0.9.0/bazel_skylib-0.9.0.tar.gz",
-            "https://github.com/bazelbuild/bazel-skylib/releases/download/0.9.0/bazel_skylib-0.9.0.tar.gz",
-        ],
-    )
-
-    maybe(
-        http_archive,
-        name = "net_zlib_zlib",
-        build_file = "@com_github_nelhage_rules_boost//:BUILD.zlib",
-        sha256 = "c3e5e9fdd5004dcb542feda5ee4f0ff0744628baf8ed2dd5d66f8ca1197cb1a1",
-        strip_prefix = "zlib-1.2.11",
-        urls = [
-            "https://mirror.bazel.build/zlib.net/zlib-1.2.11.tar.gz",
-            "https://zlib.net/zlib-1.2.11.tar.gz",
-        ],
-    )
-
-    SOURCEFORGE_MIRRORS = ["phoenixnap", "newcontinuum", "cfhcable", "superb-sea2", "cytranet", "iweb", "gigenet", "ayera", "astuteinternet", "pilotfiber", "svwh"]
-
-    maybe(
-        http_archive,
-        name = "org_bzip_bzip2",
-        build_file = "@com_github_nelhage_rules_boost//:BUILD.bzip2",
-        sha256 = "ab5a03176ee106d3f0fa90e381da478ddae405918153cca248e682cd0c4a2269",
-        strip_prefix = "bzip2-1.0.8",
-        url = "https://sourceware.org/pub/bzip2/bzip2-1.0.8.tar.gz",
-    )
-
-    maybe(
-        http_archive,
-        name = "org_lzma_lzma",
-        build_file = "@com_github_nelhage_rules_boost//:BUILD.lzma",
-        sha256 = "71928b357d0a09a12a4b4c5fafca8c31c19b0e7d3b8ebb19622e96f26dbf28cb",
-        strip_prefix = "xz-5.2.3",
-        urls = [
-            "https://%s.dl.sourceforge.net/project/lzmautils/xz-5.2.3.tar.gz" % m
-            for m in SOURCEFORGE_MIRRORS
-        ],
-    )
-
-    maybe(
-        http_archive,
-        name = "com_github_facebook_zstd",
-        build_file = "@com_github_nelhage_rules_boost//:BUILD.zstd",
-        sha256 = "e28b2f2ed5710ea0d3a1ecac3f6a947a016b972b9dd30242369010e5f53d7002",
-        strip_prefix = "zstd-1.5.1",
-        urls = [
-            "https://github.com/facebook/zstd/releases/download/v1.5.1/zstd-1.5.1.tar.gz",
-        ],
-    )
-
-    maybe(
-        http_archive,
         name = "boost",
-        build_file = "@com_github_nelhage_rules_boost//:BUILD.boost",
+        build_file = "@com_github_nelhage_rules_boost//:boost.BUILD",
         patch_cmds = ["rm -f doc/pdf/BUILD"],
         patch_cmds_win = ["Remove-Item -Force doc/pdf/BUILD"],
-        sha256 = "94ced8b72956591c4775ae2207a9763d3600b30d9d7446562c552f0a14a63be7",
-        strip_prefix = "boost_1_78_0",
-        urls = [
-            "https://boostorg.jfrog.io/artifactory/main/release/1.78.0/source/boost_1_78_0.tar.gz",
-        ],
+        url = "https://github.com/boostorg/boost/releases/download/boost-1.84.0/boost-1.84.0.tar.gz",
+        sha256 = "4d27e9efed0f6f152dc28db6430b9d3dfb40c0345da7342eaa5a987dde57bd95",
+        strip_prefix = "boost-1.84.0",
     )
 
-    maybe(
-        http_archive,
-        name = "openssl",
-        sha256 = "6f640262999cd1fb33cf705922e453e835d2d20f3f06fe0d77f6426c19257308",
-        strip_prefix = "boringssl-fc44652a42b396e1645d5e72aba053349992136a",
-        url = "https://github.com/google/boringssl/archive/fc44652a42b396e1645d5e72aba053349992136a.tar.gz",
+    http_archive(
+        name = "zlib",
+        build_file = "@com_github_nelhage_rules_boost//:zlib.BUILD",
+        url = "https://github.com/madler/zlib/releases/download/v1.3/zlib-1.3.tar.gz",
+        sha256 = "ff0ba4c292013dbc27530b3a81e1f9a813cd39de01ca5e0f8bf355702efa593e",
+        strip_prefix = "zlib-1.3",
     )
